@@ -28,6 +28,16 @@ export default function ErrorAlert({ message, onClose }: ErrorAlertProps) {
         <div className="flex-1">
           <h3 className="text-red-300 font-semibold mb-1">Upload Failed</h3>
           <p className="text-red-200/70 text-sm">{message}</p>
+          {message.includes('백엔드') && (
+            <div className="mt-2 text-xs text-red-200/50 bg-red-900/20 p-2 rounded">
+              <p className="font-semibold mb-1">💡 해결 방법:</p>
+              <ol className="list-decimal list-inside space-y-1">
+                <li>터미널에서 백엔드 서버 실행: <code className="bg-red-900/50 px-1 rounded">npm run dev</code></li>
+                <li>백엔드가 http://localhost:8000 에서 실행 중인지 확인</li>
+                <li>다시 이미지를 업로드해보세요</li>
+              </ol>
+            </div>
+          )}
         </div>
 
         {/* Close Button */}

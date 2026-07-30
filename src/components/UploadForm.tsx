@@ -35,7 +35,22 @@ export default function UploadForm({ onUploadSuccess, onUploadError }: UploadFor
 
     setIsLoading(true);
     try {
-      const response = await apiClient.uploadDocument(file);
+      // 파일 크기 최종 확인 (클라이언트 측)
+      if (file.size > 5 * 1024 * 1024) {
+        onUploadError('파일 크기는 5MB 이하여야 합니다.');
+        setPreview(null);
+        return;
+      }
+
+      // 백엔드가 실행 중인지 먼저 확인
+      const isBackendHealthy = await apiClient.getHealth();
+      if (!isBackendHealthy) {
+        onUploadError('백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인하세요.');
+        setPreview(null);
+        return;
+      }
+
+      const response = await apiClient.uploadDocument(file, 2); // 최대 2회 재시도
       if (response.success) {
         onUploadSuccess(response, preview);
       } else {
@@ -43,6 +58,7 @@ export default function UploadForm({ onUploadSuccess, onUploadError }: UploadFor
         setPreview(null);
       }
     } catch (error) {
+      console.error('Upload error:', error);
       onUploadError('요청 처리 중 오류가 발생했습니다');
       setPreview(null);
     } finally {
