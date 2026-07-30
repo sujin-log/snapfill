@@ -6,21 +6,30 @@ import { apiClient } from '@/lib/api';
 import { UploadResponse } from '@/types';
 
 interface UploadFormProps {
-  onUploadSuccess: (data: UploadResponse) => void;
+  onUploadSuccess: (data: UploadResponse, preview: string | null) => void;
   onUploadError: (error: string) => void;
 }
 
 export default function UploadForm({ onUploadSuccess, onUploadError }: UploadFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const [preview, setPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = async (file: File | null) => {
     if (!file) return;
 
+    // 이미지 미리보기 생성
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setPreview(e.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+
     const validation = validateFile(file);
     if (!validation.valid) {
       onUploadError(validation.error || '파일 검증 실패');
+      setPreview(null);
       return;
     }
 
@@ -28,12 +37,14 @@ export default function UploadForm({ onUploadSuccess, onUploadError }: UploadFor
     try {
       const response = await apiClient.uploadDocument(file);
       if (response.success) {
-        onUploadSuccess(response);
+        onUploadSuccess(response, preview);
       } else {
         onUploadError(response.error || '업로드 중 오류 발생');
+        setPreview(null);
       }
     } catch (error) {
       onUploadError('요청 처리 중 오류가 발생했습니다');
+      setPreview(null);
     } finally {
       setIsLoading(false);
       if (fileInputRef.current) {
@@ -61,7 +72,34 @@ export default function UploadForm({ onUploadSuccess, onUploadError }: UploadFor
   };
 
   return (
-    <div>
+    <div className="space-y-6">
+      {/* 미리보기 영역 */}
+      {preview && (
+        <div className="bg-slate-700/50 border border-slate-600 rounded-lg overflow-hidden">
+          <div className="relative">
+            <img
+              src={preview}
+              alt="Preview"
+              className="w-full h-auto max-h-96 object-contain bg-slate-900"
+            />
+            <div className="absolute top-0 left-0 right-0 bottom-0 bg-gradient-to-b from-black/20 to-transparent pointer-events-none"></div>
+            {isLoading && (
+              <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="w-12 h-12 rounded-lg bg-blue-500/30 flex items-center justify-center mx-auto mb-2 animate-pulse">
+                    <svg className="w-6 h-6 text-blue-400 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  </div>
+                  <p className="text-white font-medium text-sm">Processing...</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 업로드 영역 */}
       <div
         className={`relative border-2 border-dashed rounded-xl p-8 text-center transition-all cursor-pointer ${
           dragActive
@@ -84,19 +122,7 @@ export default function UploadForm({ onUploadSuccess, onUploadError }: UploadFor
         />
 
         <div className="flex flex-col items-center justify-center">
-          {isLoading ? (
-            <>
-              <div className="inline-flex items-center justify-center">
-                <div className="w-12 h-12 rounded-lg bg-blue-500/20 flex items-center justify-center animate-pulse">
-                  <svg className="w-6 h-6 text-blue-400 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                </div>
-              </div>
-              <p className="mt-4 text-white font-medium">Processing your document...</p>
-              <p className="mt-1 text-slate-400 text-sm">Please wait while we analyze your image</p>
-            </>
-          ) : (
+          {!isLoading ? (
             <>
               <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-600/10 flex items-center justify-center mb-4 mx-auto">
                 <svg
@@ -124,6 +150,18 @@ export default function UploadForm({ onUploadSuccess, onUploadError }: UploadFor
                 <span>•</span>
                 <span>📦 Max 5MB</span>
               </div>
+            </>
+          ) : (
+            <>
+              <div className="inline-flex items-center justify-center">
+                <div className="w-12 h-12 rounded-lg bg-blue-500/20 flex items-center justify-center animate-pulse">
+                  <svg className="w-6 h-6 text-blue-400 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </div>
+              </div>
+              <p className="mt-4 text-white font-medium">Processing your document...</p>
+              <p className="mt-1 text-slate-400 text-sm">Please wait while we analyze your image</p>
             </>
           )}
         </div>

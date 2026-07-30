@@ -12,6 +12,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [backendHealth, setBackendHealth] = useState<boolean | null>(null);
   const [stats, setStats] = useState({ uploaded: 0, processed: 0 });
+  const [preview, setPreview] = useState<string | null>(null);
 
   useEffect(() => {
     const checkBackendHealth = async () => {
@@ -22,8 +23,9 @@ export default function Home() {
     checkBackendHealth();
   }, []);
 
-  const handleUploadSuccess = (data: UploadResponse) => {
+  const handleUploadSuccess = (data: UploadResponse, imagePreview: string | null = null) => {
     setResult(data);
+    setPreview(imagePreview);
     setError(null);
     setStats(prev => ({
       ...prev,
@@ -40,6 +42,7 @@ export default function Home() {
   const handleReset = () => {
     setResult(null);
     setError(null);
+    setPreview(null);
   };
 
   return (
@@ -121,7 +124,7 @@ export default function Home() {
                   <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-8">
                     <h2 className="text-xl font-semibold text-white mb-6">Upload Document</h2>
                     <UploadForm
-                      onUploadSuccess={handleUploadSuccess}
+                      onUploadSuccess={(data, preview) => handleUploadSuccess(data, preview)}
                       onUploadError={handleUploadError}
                     />
                   </div>
@@ -160,7 +163,7 @@ export default function Home() {
                 <div className="space-y-6">
                   <div className="bg-gradient-to-br from-slate-800 to-slate-700/50 border border-slate-600 rounded-lg p-8">
                     <h2 className="text-xl font-semibold text-white mb-6">Processing Results</h2>
-                    <ResultsView result={result} />
+                    <ResultsView result={result} preview={preview} />
                   </div>
 
                   <div className="flex gap-4 justify-center">
