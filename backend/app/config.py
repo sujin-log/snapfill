@@ -15,6 +15,7 @@ class Settings:
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     USE_MOCK: bool = os.getenv("USE_MOCK", "False").lower() == "true"
     USE_CACHE: bool = os.getenv("USE_CACHE", "True").lower() == "true"
+    USE_SQLITE: bool = os.getenv("USE_SQLITE", "False").lower() == "true"
 
     # Supabase Settings
     SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")

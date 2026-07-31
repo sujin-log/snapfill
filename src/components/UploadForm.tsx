@@ -50,13 +50,47 @@ export default function UploadForm({ onUploadSuccess, onUploadError }: UploadFor
         return;
       }
 
-      const response = await apiClient.uploadDocument(file, 2); // 최대 2회 재시도
-      if (response.success) {
-        onUploadSuccess(response, preview);
-      } else {
-        onUploadError(response.error || '업로드 중 오류 발생');
+      // Step 1: 파일 업로드
+      console.log('📤 Step 1: 파일 업로드 중...');
+      const uploadResponse = await apiClient.uploadDocument(file, 2);
+      if (!uploadResponse.success) {
+        onUploadError(uploadResponse.error || '업로드 중 오류 발생');
         setPreview(null);
+        return;
       }
+
+      // Step 2: OCR 추출
+      console.log('📋 Step 2: OCR 텍스트 추출 중...');
+      const ocrResponse = await apiClient.extractOCR(file);
+      if (!ocrResponse.success) {
+        onUploadError(ocrResponse.error || 'OCR 추출 실패');
+        setPreview(null);
+        return;
+      }
+
+      const ocrText = ocrResponse.ocr_text;
+
+      // Step 3: 문서 분류 + 필드 추출 + DB 저장
+      console.log('🔄 Step 3: 문서 분류 및 필드 추출 중...');
+      const processResponse = await apiClient.processDocument(ocrText);
+      if (!processResponse.success) {
+        onUploadError(processResponse.error || '처리 중 오류 발생');
+        setPreview(null);
+        return;
+      }
+
+      // 성공: 결과 전달
+      const result = {
+        ...uploadResponse,
+        document_type: processResponse.document_type,
+        data: processResponse.data,
+        record_id: processResponse.record_id,
+        ocr_text: ocrText,
+        created_at: new Date().toISOString(),
+      };
+
+      console.log('✅ 모든 단계 완료:', result);
+      onUploadSuccess(result, preview);
     } catch (error) {
       console.error('Upload error:', error);
       onUploadError('요청 처리 중 오류가 발생했습니다');

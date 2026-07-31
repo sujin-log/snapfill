@@ -141,6 +141,43 @@ class ApiClient {
     }
   }
 
+  async extractOCR(file: File): Promise<any> {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await this.client.post('/ocr', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      return response.data;
+    } catch (error) {
+      const errorMessage = this.getErrorMessage(error as AxiosError | Error);
+      console.error('OCR error:', error);
+      return {
+        success: false,
+        error: errorMessage,
+      };
+    }
+  }
+
+  async processDocument(ocr_text: string): Promise<any> {
+    try {
+      const response = await this.client.post('/process', {
+        ocr_text,
+      });
+      return response.data;
+    } catch (error) {
+      const errorMessage = this.getErrorMessage(error as AxiosError | Error);
+      console.error('Process error:', error);
+      return {
+        success: false,
+        error: errorMessage,
+      };
+    }
+  }
+
   async getHealth(): Promise<boolean> {
     try {
       const response = await this.client.get('/health', {

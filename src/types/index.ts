@@ -4,6 +4,7 @@ export interface ExtractedData {
   applicant_name?: string;
   age?: number;
   medical_history?: string;
+  coverage_type?: string;
   merchant_name?: string;
   total_amount?: number;
   transaction_date?: string;
@@ -16,7 +17,11 @@ export interface UploadResponse {
   data?: ExtractedData;
   error?: string;
   file_url?: string;
+  file_path?: string;
   original_filename?: string;
+  record_id?: number;
+  ocr_text?: string;
+  created_at?: string;
 }
 
 export interface Document {

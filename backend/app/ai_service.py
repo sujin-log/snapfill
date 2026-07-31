@@ -46,7 +46,7 @@ class AIService:
             try:
                 with open(cache_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                logger.info(f"Loaded from cache: {cache_key}")
+                logger.info(f"[CACHE] Loaded from cache: {cache_key}")
                 return data
             except Exception as e:
                 logger.warning(f"Failed to load cache {cache_key}: {e}")
@@ -61,7 +61,7 @@ class AIService:
         try:
             with open(cache_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
-            logger.info(f"Saved to cache: {cache_key}")
+            logger.info(f"[CACHE] Saved to cache: {cache_key}")
         except Exception as e:
             logger.warning(f"Failed to save cache {cache_key}: {e}")
 
@@ -88,7 +88,7 @@ class AIService:
 
         # Use mock response
         if self.use_mock:
-            logger.info("Using mock response for classification")
+            logger.info("[MOCK] Using mock response for classification")
             result = mock_responses.MOCK_CLASSIFICATION.copy()
             self._save_to_cache(cache_key, result)
             return result
@@ -125,7 +125,7 @@ class AIService:
 
         # Use mock response
         if self.use_mock:
-            logger.info("Using mock response for insurance extraction")
+            logger.info("[MOCK] Using mock response for insurance extraction")
             result = mock_responses.MOCK_INSURANCE_EXTRACTION.copy()
             self._save_to_cache(cache_key, result)
             return result
@@ -162,7 +162,7 @@ class AIService:
 
         # Use mock response
         if self.use_mock:
-            logger.info("Using mock response for receipt extraction")
+            logger.info("[MOCK] Using mock response for receipt extraction")
             result = mock_responses.MOCK_RECEIPT_EXTRACTION.copy()
             self._save_to_cache(cache_key, result)
             return result
