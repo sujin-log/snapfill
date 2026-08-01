@@ -1,5 +1,0 @@
-{
-  "document_type": "insurance",
-  "confidence": 0.95,
-  "reason": "The text contains '보험 가입 신청서' which translates to 'insurance subscription application form', and includes age information, which strongly indicates an insurance document."
-}

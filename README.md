@@ -25,7 +25,7 @@ SnapFill은 보험 신청서나 영수증 사진을 업로드하면, AI가 자�
 |------|------|
 | **프론트엔드** | Next.js 14, TypeScript, Tailwind CSS |
 | **백엔드** | FastAPI, Python 3.9+ |
-| **OCR** | EasyOCR (한글 지원) |
+| **OCR** | Tesseract (한글/영문 지원, 메모리 효율적) |
 | **AI** | Google Gemini API |
 | **DB/Storage** | Supabase (PostgreSQL) |
 
@@ -41,7 +41,7 @@ User Upload (Image)
    ├─ Image Preview
         ↓
    Backend (FastAPI)
-   ├─ OCR (EasyOCR)
+   ├─ OCR (Tesseract)
    ├─ Classification (Gemini AI)
    ├─ Field Extraction (Gemini AI)
    ├─ Save to DB (Supabase)
@@ -62,13 +62,29 @@ User Upload (Image)
 **`.env.local` (프론트엔드)**
 ```env
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
 **`backend/.env` (백엔드)**
 ```env
-GOOGLE_API_KEY=your_gemini_api_key
+# Supabase 설정 (필수)
 SUPABASE_URL=your_supabase_url
-SUPABASE_API_KEY=your_supabase_key
+SUPABASE_API_KEY=your_supabase_secret_key
+
+# AI API 설정 (필수)
+GEMINI_API_KEY=your_gemini_api_key
+
+# 선택사항
+USE_MOCK=False
+USE_CACHE=True
+USE_SQLITE=False
+DATABASE_URL=sqlite:///./snapfill.db
+ENVIRONMENT=development
+HOST=0.0.0.0
+PORT=8000
+DEBUG=False
+LOG_LEVEL=INFO
 ```
 
 ### 로컬 개발
@@ -102,16 +118,121 @@ python -m uvicorn app.main:app --reload
 
 ---
 
+## 🧪 테스트
+
+### 테스트 이미지
+
+프로젝트의 `test_samples/` 디렉토리에 미리 준비된 테스트 이미지들이 있습니다:
+
+**보험 신청서**:
+- `insurance_mock.png` - 기본 보험 신청서
+- `insurance_mock2.png` - 보험 신청서 (변형 1)
+- `insurance_mock3.png` - 보험 신청서 (변형 2)
+- `insurance_v2_4_fire.png` - 화재보험 신청서
+
+**영수증**:
+- `receipt_1_basic.png` - 기본 영수증
+- `receipt_2_merchant.png` - 상인용 영수증
+- `receipt_3_itemized.png` - 상세 항목 영수증
+- `receipt_4_bookstore.png` - 서점 영수증
+
+### 로컬 테스트
+
+#### 방법 1: 웹 UI 테스트
+1. 프론트엔드/백엔드 모두 실행 중인 상태 확인
+2. `http://localhost:3000` 열기
+3. "지금 시작하세요" 섹션에서 `test_samples/` 폴더의 이미지 선택
+4. 업로드하고 결과 확인
+
+#### 방법 2: cURL로 API 테스트
+```bash
+# OCR 테스트
+curl -X POST http://localhost:8000/ocr \
+  -F "file=@test_samples/insurance_mock.png"
+
+# 전체 파이프라인 테스트 (OCR → 분류 → 추출 → 저장)
+# 1. 먼저 OCR 실행하여 텍스트 추출
+curl -X POST http://localhost:8000/ocr \
+  -F "file=@test_samples/receipt_1_basic.png" > ocr_output.json
+
+# 2. 추출한 텍스트로 전체 처리 파이프라인 실행
+curl -X POST http://localhost:8000/process \
+  -H "Content-Type: application/json" \
+  -d '{"ocr_text": "Merchant: Cafe\\nAmount: 5000\\nDate: 2026-08-02"}'
+
+# 또는 문서 분류만 테스트
+curl -X POST http://localhost:8000/classify \
+  -H "Content-Type: application/json" \
+  -d '{"ocr_text": "Applicant Name: John\\nAge: 35"}'
+```
+
+#### 방법 3: Python 스크립트로 테스트
+```python
+import requests
+from pathlib import Path
+
+BASE_URL = "http://localhost:8000"
+TEST_IMAGE = Path("test_samples/insurance_mock.png")
+
+# 이미지 업로드 및 OCR
+with open(TEST_IMAGE, "rb") as f:
+    response = requests.post(
+        f"{BASE_URL}/ocr",
+        files={"file": f}
+    )
+    print("OCR Result:", response.json())
+
+# 문서 분류
+classify_response = requests.post(
+    f"{BASE_URL}/classify",
+    json={"ocr_text": response.json()["ocr_text"]}
+)
+print("Classification:", classify_response.json())
+```
+
+### 예상 결과
+
+**보험 신청서 처리**:
+```json
+{
+  "success": true,
+  "document_type": "insurance",
+  "data": {
+    "applicant_name": "...",
+    "age": ...,
+    "coverage_type": "...",
+    "medical_history": "..."
+  }
+}
+```
+
+**영수증 처리**:
+```json
+{
+  "success": true,
+  "document_type": "receipt",
+  "data": {
+    "merchant_name": "...",
+    "total_amount": ...,
+    "transaction_date": "..."
+  }
+}
+```
+
+---
+
 ## 📄 API 엔드포인트
 
 | 메서드 | 엔드포인트 | 설명 |
 |--------|-----------|------|
-| POST | `/upload` | 이미지 업로드 |
-| POST | `/ocr` | OCR 추출 |
-| POST | `/classify` | 문서 분류 |
-| POST | `/extract/insurance` | 보험 필드 추출 |
-| POST | `/extract/receipt` | 영수증 필드 추출 |
 | GET | `/health` | 헬스 체크 |
+| POST | `/upload` | 이미지 업로드 및 저장 |
+| POST | `/ocr` | 이미지에서 OCR 텍스트 추출 |
+| POST | `/classify` | 문서 분류 (insurance/receipt) |
+| POST | `/extract/insurance` | 보험 서류 필드 추출 |
+| POST | `/extract/receipt` | 영수증 필드 추출 |
+| POST | `/process` | 전체 파이프라인 (OCR → 분류 → 추출 → 저장) |
+| DELETE | `/documents/{document_id}` | 문서 삭제 |
 
 ---
 

@@ -6,14 +6,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**SnapFill** is a 1-day MVP portfolio project that demonstrates AI-powered document classification and field extraction. Users upload images of documents (insurance applications or receipts), and the system automatically:
+**SnapFill** is a portfolio project that demonstrates AI-powered document classification and field extraction. Users upload images of documents (insurance applications or receipts), and the system automatically:
 1. Extracts text via OCR (Tesseract)
-2. Classifies document type using Claude API
+2. Classifies document type using Gemini AI
 3. Extracts key fields based on document type
-4. Stores results in a database
-5. Displays structured results in a web UI
+4. Stores results in Supabase database
+5. Displays structured results in a responsive web UI
 
-**Key constraint:** Development must be completed within 1 day (2026-07-30 09:00 ~ 22:00). Follow ROADMAP.md strictly for time-boxed blocks and risk mitigation.
+**Note:** Refer to ROADMAP.md for development workflow and best practices.
 
 ---
 
@@ -22,36 +22,38 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### System Components
 
 ```
-Frontend (React)
+Frontend (Next.js)
   ↓
 FastAPI Backend
   ├── OCR Pipeline (Tesseract)
-  ├── AI Classification (Claude API)
-  ├── Field Extraction (Claude API)
-  └── Database Layer (SQLite/SQLAlchemy)
+  ├── AI Classification (Gemini API)
+  ├── Field Extraction (Gemini API)
+  └── Database Layer (Supabase PostgreSQL)
   ↓
-SQLite Database (documents, insurance_records, receipt_records)
+Supabase Database (documents, insurance_records, receipt_records)
 ```
 
 ### Key Design Decisions
 
-1. **OCR First:** Tesseract OCR is validated in BLOCK 1 (early risk mitigation) before other components depend on it
-2. **Prompt-Based AI:** Claude API handles both classification and field extraction via carefully tuned prompts (validated in BLOCK 2)
+1. **OCR Pipeline:** Tesseract OCR with preprocessing (grayscale, thresholding, morphological operations) for robust text extraction
+2. **AI-Powered Classification:** Gemini API classifies documents (insurance/receipt) and extracts structured fields via prompts
 3. **Stateless API:** Each upload is independent; no session/auth complexity
-4. **Local-First Storage:** SQLite for simplicity; image files stored locally and deleted after processing
-5. **Separation of Concerns:** Backend (Python/FastAPI) and Frontend (React) are decoupled and communicate via JSON REST API
+4. **Cloud-First Storage:** Supabase PostgreSQL for scalability; image files uploaded to Supabase Storage and deleted after processing
+5. **Separation of Concerns:** Backend (Python/FastAPI) and Frontend (Next.js) are decoupled and communicate via JSON REST API
+6. **Document Deletion:** Users can delete processed documents via DELETE /documents/{document_id} endpoint
 
 ### Data Flow
 
-- User uploads image → Backend validates file (MIME type, size < 5MB)
-- Tesseract extracts text from image
-- Claude API classifies: "insurance" or "receipt"
-- Claude API extracts fields based on type:
-  - **Insurance:** applicant_name, age, medical_history
+- User uploads image → Backend validates file (MIME type jpg/png, size < 5MB)
+- Image uploaded to Supabase Storage
+- Tesseract extracts text from image via OCR pipeline
+- Gemini API classifies: "insurance" or "receipt"
+- Gemini API extracts fields based on type:
+  - **Insurance:** applicant_name, age, coverage_type, medical_history
   - **Receipt:** merchant_name, total_amount, transaction_date
-- Results saved to documents + type-specific record tables
+- Results saved to Supabase (documents + type-specific record tables)
 - Frontend displays structured results or error message
-- Temporary image file deleted
+- Image deletion handled via DELETE /documents/{document_id}
 
 ---
 
@@ -59,16 +61,18 @@ SQLite Database (documents, insurance_records, receipt_records)
 
 ### Backend
 - **Language:** Python 3.9+
-- **Framework:** FastAPI
-- **Database:** SQLite with SQLAlchemy ORM
-- **OCR:** Tesseract (system dependency) + pytesseract
-- **AI:** Claude API (Anthropic)
-- **Environment:** Python venv
+- **Framework:** FastAPI (uvicorn)
+- **Database:** Supabase (PostgreSQL)
+- **OCR:** Tesseract + OpenCV preprocessing
+- **AI:** Google Gemini API
+- **Storage:** Supabase Storage
+- **ORM:** SQLAlchemy (optional, for SQLite fallback)
 
 ### Frontend
-- **Framework:** React 18+
+- **Framework:** Next.js 14 (React)
+- **Language:** TypeScript
 - **Styling:** Tailwind CSS
-- **HTTP Client:** axios or fetch API
+- **HTTP Client:** axios
 
 ### Common Commands
 
