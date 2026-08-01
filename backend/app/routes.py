@@ -9,23 +9,10 @@ from .ai_service import ai_service
 from PIL import Image
 import io
 
-# OCR Engine - Try EasyOCR first, fallback to Tesseract
-try:
-    import easyocr
-    ocr_engine = easyocr.Reader(['ko', 'en'], gpu=False)
-    OCR_ENGINE = 'easyocr'
-    logger_init = logging.getLogger(__name__)
-    logger_init.info("[INFO] Using EasyOCR for OCR")
-except ImportError:
-    try:
-        import pytesseract
-        OCR_ENGINE = 'tesseract'
-        logger_init = logging.getLogger(__name__)
-        logger_init.warning("[WARNING] EasyOCR not installed. Falling back to Tesseract")
-    except ImportError:
-        OCR_ENGINE = None
-        logger_init = logging.getLogger(__name__)
-        logger_init.error("[ERROR] No OCR engine available")
+# OCR Engine - Tesseract only (memory-efficient for Render Free tier)
+import pytesseract
+logger_init = logging.getLogger(__name__)
+logger_init.info("[INFO] Using Tesseract OCR")
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -432,72 +419,46 @@ async def extract_ocr(file: UploadFile = File(...)):
                 detail=f"파일 크기는 5MB 이하여야 합니다",
             )
 
-        # OCR 처리 (EasyOCR 또는 Tesseract)
+        # OCR 처리 (Tesseract - 메모리 효율적)
+        import cv2
+        import numpy as np
+
         image = Image.open(io.BytesIO(file_content))
 
-        if OCR_ENGINE == 'easyocr':
-            # EasyOCR 사용 (한글 지원 우수)
-            try:
-                import tempfile
-                import os
-                # 임시 이미지 파일 저장
-                with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
-                    image.save(tmp.name)
-                    temp_image_path = tmp.name
+        # PIL 이미지를 OpenCV 형식으로 변환
+        cv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
 
-                # EasyOCR 실행
-                results = ocr_engine.readtext(temp_image_path)
-                ocr_text = '\n'.join([line[1] for line in results if line[1].strip()])
+        # 1. 이미지 업스케일 (저해상도 이미지)
+        if image.width < 1000:
+            scale_factor = 3 if image.width < 500 else 2
+            cv_image = cv2.resize(cv_image, None, fx=scale_factor, fy=scale_factor, interpolation=cv2.INTER_CUBIC)
+            logger.info(f"[INFO] Image scaled up by {scale_factor}x")
 
-                # 임시 파일 삭제
-                os.unlink(temp_image_path)
+        # 2. 그레이스케일 변환
+        gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
+        logger.info(f"[INFO] Converted to grayscale")
 
-                logger.info(f"[OK] EasyOCR success: {len(ocr_text)} characters extracted")
-            except Exception as e:
-                logger.error(f"[ERROR] EasyOCR failed: {e}")
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"OCR 처리 중 오류가 발생했습니다: {str(e)}",
-                )
-        else:
-            # Tesseract 사용 (폴백)
-            import cv2
-            import numpy as np
+        # 3. 대비 강화 (CLAHE: Contrast Limited Adaptive Histogram Equalization)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        gray = clahe.apply(gray)
+        logger.info(f"[INFO] Applied CLAHE for contrast enhancement")
 
-            # PIL 이미지를 OpenCV 형식으로 변환
-            cv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+        # 4. 이진화 (Otsu's method)
+        _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        logger.info(f"[INFO] Applied binary thresholding (Otsu)")
 
-            # 1. 이미지 업스케일 (저해상도 이미지)
-            if image.width < 1000:
-                scale_factor = 3 if image.width < 500 else 2
-                cv_image = cv2.resize(cv_image, None, fx=scale_factor, fy=scale_factor, interpolation=cv2.INTER_CUBIC)
-                logger.info(f"[INFO] Image scaled up by {scale_factor}x")
+        # 5. 노이즈 제거 (morphological operations)
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+        binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel, iterations=1)
+        binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel, iterations=1)
+        logger.info(f"[INFO] Applied morphological noise reduction")
 
-            # 2. 그레이스케일 변환
-            gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
-            logger.info(f"[INFO] Converted to grayscale")
+        # 6. PIL로 변환 (Tesseract 호환)
+        processed_image = Image.fromarray(binary)
 
-            # 3. 대비 강화 (CLAHE: Contrast Limited Adaptive Histogram Equalization)
-            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-            gray = clahe.apply(gray)
-            logger.info(f"[INFO] Applied CLAHE for contrast enhancement")
-
-            # 4. 이진화 (Otsu's method)
-            _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-            logger.info(f"[INFO] Applied binary thresholding (Otsu)")
-
-            # 5. 노이즈 제거 (morphological operations)
-            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
-            binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel, iterations=1)
-            binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel, iterations=1)
-            logger.info(f"[INFO] Applied morphological noise reduction")
-
-            # 6. PIL로 변환 (Tesseract 호환)
-            processed_image = Image.fromarray(binary)
-
-            # 7. Tesseract OCR (PSM 6: 균일한 텍스트 블록, 표 형태 권장)
-            ocr_text = pytesseract.image_to_string(processed_image, lang='kor+eng', config='--psm 6')
-            logger.info(f"[INFO] Tesseract OCR completed with PSM 6")
+        # 7. Tesseract OCR (PSM 6: 균일한 텍스트 블록, 표 형태 권장)
+        ocr_text = pytesseract.image_to_string(processed_image, lang='kor+eng', config='--psm 6')
+        logger.info(f"[INFO] Tesseract OCR completed with PSM 6")
 
         if not ocr_text.strip():
             return {
@@ -516,4 +477,154 @@ async def extract_ocr(file: UploadFile = File(...)):
         raise HTTPException(
             status_code=500,
             detail=f"OCR 처리 중 오류가 발생했습니다: {str(e)}",
+        )
+
+
+@router.delete("/documents/{document_id}")
+async def delete_document(document_id: int):
+    """
+    문서 및 관련 레코드 삭제
+    Supabase 또는 SQLite에서 document와 insurance_records/receipt_records를 삭제
+
+    Args:
+        document_id: 삭제할 문서 ID
+
+    Returns:
+        {
+            "success": bool,
+            "message": str,
+            "deleted_record_type": "insurance" | "receipt" | None
+        }
+    """
+    from supabase import create_client
+
+    try:
+        if settings.USE_SQLITE:
+            # SQLite 삭제
+            from sqlalchemy import create_engine, Column, Integer, String, DateTime, Float, func
+            from sqlalchemy.orm import sessionmaker, declarative_base
+
+            engine = create_engine(settings.DATABASE_URL)
+            Session = sessionmaker(bind=engine)
+            session = Session()
+
+            Base = declarative_base()
+
+            class Document(Base):
+                __tablename__ = "documents"
+                id = Column(Integer, primary_key=True)
+                filename = Column(String)
+                file_path = Column(String)
+                file_url = Column(String)
+                doc_type = Column(String, nullable=True)
+                extracted_fields = Column(String, nullable=True)
+                status = Column(String)
+                created_at = Column(DateTime, default=func.now())
+
+            class InsuranceRecord(Base):
+                __tablename__ = "insurance_records"
+                id = Column(Integer, primary_key=True)
+                applicant_name = Column(String)
+                age = Column(Integer, nullable=True)
+                coverage_type = Column(String, nullable=True)
+                medical_history = Column(String, nullable=True)
+                created_at = Column(DateTime, default=func.now())
+
+            class ReceiptRecord(Base):
+                __tablename__ = "receipt_records"
+                id = Column(Integer, primary_key=True)
+                merchant_name = Column(String)
+                total_amount = Column(Float, nullable=True)
+                transaction_date = Column(String, nullable=True)
+                created_at = Column(DateTime, default=func.now())
+
+            Base.metadata.create_all(engine)
+
+            # 문서 조회
+            doc = session.query(Document).filter(Document.id == document_id).first()
+            if not doc:
+                session.close()
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"문서를 찾을 수 없습니다 (ID: {document_id})",
+                )
+
+            deleted_record_type = None
+
+            # doc_type에 따라 관련 레코드 삭제
+            if doc.doc_type == "insurance":
+                # insurance_records에서 같은 ID의 레코드 삭제 (1:1 관계 가정)
+                insurance_record = session.query(InsuranceRecord).filter(
+                    InsuranceRecord.id == document_id
+                ).first()
+                if insurance_record:
+                    session.delete(insurance_record)
+                    deleted_record_type = "insurance"
+                    logger.info(f"[OK] Insurance record deleted: ID={document_id}")
+            elif doc.doc_type == "receipt":
+                # receipt_records에서 같은 ID의 레코드 삭제 (1:1 관계 가정)
+                receipt_record = session.query(ReceiptRecord).filter(
+                    ReceiptRecord.id == document_id
+                ).first()
+                if receipt_record:
+                    session.delete(receipt_record)
+                    deleted_record_type = "receipt"
+                    logger.info(f"[OK] Receipt record deleted: ID={document_id}")
+
+            # 문서 삭제
+            session.delete(doc)
+            session.commit()
+            session.close()
+
+            logger.info(f"[OK] Document deleted from SQLite: ID={document_id}")
+
+            return {
+                "success": True,
+                "message": f"문서가 삭제되었습니다 (ID: {document_id})",
+                "deleted_record_type": deleted_record_type,
+            }
+        else:
+            # Supabase 삭제
+            supabase = create_client(settings.SUPABASE_URL, settings.SUPABASE_API_KEY)
+
+            # 1. 문서 조회 (문서 타입 확인)
+            doc_response = supabase.table("documents").select("id, doc_type").eq("id", document_id).execute()
+            if not doc_response.data:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"문서를 찾을 수 없습니다 (ID: {document_id})",
+                )
+
+            doc = doc_response.data[0]
+            deleted_record_type = None
+
+            # 2. 문서 타입에 따라 관련 레코드 삭제
+            if doc.get("doc_type") == "insurance":
+                # insurance_records 삭제 (1:1 관계 가정)
+                supabase.table("insurance_records").delete().eq("id", document_id).execute()
+                deleted_record_type = "insurance"
+                logger.info(f"[OK] Insurance record deleted from Supabase: ID={document_id}")
+            elif doc.get("doc_type") == "receipt":
+                # receipt_records 삭제 (1:1 관계 가정)
+                supabase.table("receipt_records").delete().eq("id", document_id).execute()
+                deleted_record_type = "receipt"
+                logger.info(f"[OK] Receipt record deleted from Supabase: ID={document_id}")
+
+            # 3. 문서 삭제
+            supabase.table("documents").delete().eq("id", document_id).execute()
+            logger.info(f"[OK] Document deleted from Supabase: ID={document_id}")
+
+            return {
+                "success": True,
+                "message": f"문서가 삭제되었습니다 (ID: {document_id})",
+                "deleted_record_type": deleted_record_type,
+            }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ 삭제 실패: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"문서 삭제 중 오류가 발생했습니다: {str(e)}",
         )

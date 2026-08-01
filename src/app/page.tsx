@@ -71,6 +71,22 @@ export default function Home() {
     setTimeout(() => setSelectedDocument(null), 300);
   };
 
+  const handleDocumentDeleted = (documentId: number) => {
+    // 삭제된 문서를 목록에서 제거
+    setDocuments(prev => prev.filter(doc => doc.document_id !== documentId));
+
+    // 상세보기 모달이 열려있으면 닫기
+    if (selectedDocument?.document_id === documentId) {
+      handleCloseModal();
+    }
+
+    // 통계 업데이트
+    setStats(prev => ({
+      uploaded: prev.uploaded > 0 ? prev.uploaded - 1 : 0,
+      processed: prev.processed > 0 ? prev.processed - 1 : 0
+    }));
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
       {/* Header */}
@@ -254,7 +270,7 @@ export default function Home() {
                 <span className="w-1 h-8 bg-gradient-to-b from-blue-500 to-purple-500 rounded-full"></span>
                 처리 이력
               </h2>
-              <DocumentsList documents={documents} onSelectDocument={handleDocumentClick} />
+              <DocumentsList documents={documents} onSelectDocument={handleDocumentClick} onDocumentDeleted={handleDocumentDeleted} />
             </div>
           </section>
         )}

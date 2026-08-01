@@ -1,0 +1,5 @@
+{
+  "document_type": "insurance",
+  "confidence": 1.0,
+  "reason": "The text contains terms such as '보험 신청서' (insurance application), '보험 종류' (type of insurance), and '의료 이력' (medical history), which match the insurance document guidelines."
+}

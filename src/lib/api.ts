@@ -178,6 +178,20 @@ class ApiClient {
     }
   }
 
+  async deleteDocument(documentId: number): Promise<any> {
+    try {
+      const response = await this.client.delete(`/documents/${documentId}`);
+      return response.data;
+    } catch (error) {
+      const errorMessage = this.getErrorMessage(error as AxiosError | Error);
+      console.error('Delete error:', error);
+      return {
+        success: false,
+        error: errorMessage,
+      };
+    }
+  }
+
   async getHealth(): Promise<boolean> {
     try {
       const response = await this.client.get('/health', {
