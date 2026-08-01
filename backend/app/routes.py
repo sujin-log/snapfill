@@ -461,14 +461,43 @@ async def extract_ocr(file: UploadFile = File(...)):
                 )
         else:
             # Tesseract 사용 (폴백)
-            # 이미지 전처리: 해상도 낮은 이미지 크기 확대
+            import cv2
+            import numpy as np
+
+            # PIL 이미지를 OpenCV 형식으로 변환
+            cv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+
+            # 1. 이미지 업스케일 (저해상도 이미지)
             if image.width < 1000:
                 scale_factor = 3 if image.width < 500 else 2
-                new_size = (image.width * scale_factor, image.height * scale_factor)
-                image = image.resize(new_size, Image.Resampling.LANCZOS)
-                logger.info(f"[INFO] Image scaled up by {scale_factor}x for better OCR recognition")
+                cv_image = cv2.resize(cv_image, None, fx=scale_factor, fy=scale_factor, interpolation=cv2.INTER_CUBIC)
+                logger.info(f"[INFO] Image scaled up by {scale_factor}x")
 
-            ocr_text = pytesseract.image_to_string(image, lang='kor+eng')
+            # 2. 그레이스케일 변환
+            gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
+            logger.info(f"[INFO] Converted to grayscale")
+
+            # 3. 대비 강화 (CLAHE: Contrast Limited Adaptive Histogram Equalization)
+            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+            gray = clahe.apply(gray)
+            logger.info(f"[INFO] Applied CLAHE for contrast enhancement")
+
+            # 4. 이진화 (Otsu's method)
+            _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            logger.info(f"[INFO] Applied binary thresholding (Otsu)")
+
+            # 5. 노이즈 제거 (morphological operations)
+            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+            binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel, iterations=1)
+            binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel, iterations=1)
+            logger.info(f"[INFO] Applied morphological noise reduction")
+
+            # 6. PIL로 변환 (Tesseract 호환)
+            processed_image = Image.fromarray(binary)
+
+            # 7. Tesseract OCR (PSM 6: 균일한 텍스트 블록, 표 형태 권장)
+            ocr_text = pytesseract.image_to_string(processed_image, lang='kor+eng', config='--psm 6')
+            logger.info(f"[INFO] Tesseract OCR completed with PSM 6")
 
         if not ocr_text.strip():
             return {
