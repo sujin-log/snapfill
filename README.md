@@ -78,8 +78,6 @@ GEMINI_API_KEY=your_gemini_api_key
 # 선택사항
 USE_MOCK=False
 USE_CACHE=True
-USE_SQLITE=False
-DATABASE_URL=sqlite:///./snapfill.db
 ENVIRONMENT=development
 HOST=0.0.0.0
 PORT=8000
