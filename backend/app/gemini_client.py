@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 if settings.GEMINI_API_KEY:
     client = genai.Client(api_key=settings.GEMINI_API_KEY)
-    model_id = "gemini-flash-latest"
+    model_id = "gemini-flash-lite-latest"
 else:
     logger.warning("GEMINI_API_KEY not configured")
     client = None

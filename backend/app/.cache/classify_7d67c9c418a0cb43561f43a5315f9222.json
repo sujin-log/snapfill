@@ -1,0 +1,5 @@
+{
+  "document_type": "insurance",
+  "confidence": 1.0,
+  "reason": "The text is an insurance application form ('보험 가입 신청서') containing life insurance ('생명보험') details, applicant name, age, and medical history ('질병 이력')."
+}

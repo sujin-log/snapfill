@@ -1,0 +1,5 @@
+{
+  "document_type": "insurance",
+  "confidence": 1.0,
+  "reason": "The document is an insurance application form ('보험 가입 신청서') containing insurance type, applicant name, age, and medical history."
+}

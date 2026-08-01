@@ -91,6 +91,9 @@ export default function UploadForm({ onUploadSuccess, onUploadError }: UploadFor
 
       console.log('✅ 모든 단계 완료:', result);
       onUploadSuccess(result, preview);
+
+      // 업로드 완료 후 폼 초기화
+      setPreview(null);
     } catch (error) {
       console.error('Upload error:', error);
       onUploadError('요청 처리 중 오류가 발생했습니다');
